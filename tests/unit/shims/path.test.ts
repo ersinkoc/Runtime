@@ -173,6 +173,10 @@ describe('path shim', () => {
     it('should handle relative double ..', () => {
       expect(pathShim.normalize('../../foo')).toBe('../../foo');
     });
+
+    it('should clamp .. at root for absolute paths', () => {
+      expect(pathShim.normalize('/foo/../..')).toBe('/');
+    });
   });
 
   describe('parse branch coverage', () => {
@@ -218,6 +222,14 @@ describe('path shim', () => {
   describe('extname double dot', () => {
     it('should return empty for ..', () => {
       expect(pathShim.extname('..')).toBe('');
+    });
+
+    it('should handle consecutive dots like foo..bar', () => {
+      expect(pathShim.extname('foo..bar')).toBe('.bar');
+    });
+
+    it('should handle triple dots like foo...', () => {
+      expect(pathShim.extname('foo...')).toBe('.');
     });
   });
 

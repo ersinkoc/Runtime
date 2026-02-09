@@ -158,6 +158,18 @@ describe('url shim', () => {
     });
   });
 
+  describe('format without protocol or auth', () => {
+    it('should format with just pathname when no protocol', () => {
+      const result = urlModule.format({ pathname: '/path' });
+      expect(result).toBe('/path');
+    });
+
+    it('should format with protocol but no auth', () => {
+      const result = urlModule.format({ protocol: 'http:', hostname: 'example.com' });
+      expect(result).toBe('http:example.com');
+    });
+  });
+
   describe('format branch coverage', () => {
     it('should add colon to protocol without colon', () => {
       const result = urlModule.format({

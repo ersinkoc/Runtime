@@ -137,99 +137,62 @@ describe('worker_threads shim', () => {
   });
 
   describe('Worker with successful native Worker', () => {
+    let mockWorkerInstance: any;
+    const OriginalWorker = globalThis.Worker;
+
+    function installMockWorker() {
+      mockWorkerInstance = null;
+      globalThis.Worker = class MockWorker {
+        onmessage: any = null;
+        onerror: any = null;
+        postMessage = vi.fn();
+        terminate = vi.fn();
+        constructor() { mockWorkerInstance = this; }
+      } as any;
+    }
+
+    afterEach(() => {
+      globalThis.Worker = OriginalWorker;
+    });
+
     it('should forward onmessage events', () => {
-      const mockWorkerInstance: any = {
-        onmessage: null,
-        onerror: null,
-        postMessage: vi.fn(),
-        terminate: vi.fn(),
-      };
-      const OriginalWorker = globalThis.Worker;
-      globalThis.Worker = vi.fn(() => mockWorkerInstance) as any;
-      try {
-        const worker = new workerThreadsModule.Worker('/test.js');
-        const msgHandler = vi.fn();
-        worker.on('message', msgHandler);
-        mockWorkerInstance.onmessage({ data: 'hello' });
-        expect(msgHandler).toHaveBeenCalledWith('hello');
-      } finally {
-        globalThis.Worker = OriginalWorker;
-      }
+      installMockWorker();
+      const worker = new workerThreadsModule.Worker('/test.js');
+      const msgHandler = vi.fn();
+      worker.on('message', msgHandler);
+      mockWorkerInstance.onmessage({ data: 'hello' });
+      expect(msgHandler).toHaveBeenCalledWith('hello');
     });
 
     it('should forward onerror events', () => {
-      const mockWorkerInstance: any = {
-        onmessage: null,
-        onerror: null,
-        postMessage: vi.fn(),
-        terminate: vi.fn(),
-      };
-      const OriginalWorker = globalThis.Worker;
-      globalThis.Worker = vi.fn(() => mockWorkerInstance) as any;
-      try {
-        const worker = new workerThreadsModule.Worker('/test.js');
-        const errHandler = vi.fn();
-        worker.on('error', errHandler);
-        mockWorkerInstance.onerror({ message: 'test error' });
-        expect(errHandler).toHaveBeenCalledWith(expect.any(Error));
-      } finally {
-        globalThis.Worker = OriginalWorker;
-      }
+      installMockWorker();
+      const worker = new workerThreadsModule.Worker('/test.js');
+      const errHandler = vi.fn();
+      worker.on('error', errHandler);
+      mockWorkerInstance.onerror({ message: 'test error' });
+      expect(errHandler).toHaveBeenCalledWith(expect.any(Error));
     });
 
     it('should postMessage through native worker', () => {
-      const mockWorkerInstance: any = {
-        onmessage: null,
-        onerror: null,
-        postMessage: vi.fn(),
-        terminate: vi.fn(),
-      };
-      const OriginalWorker = globalThis.Worker;
-      globalThis.Worker = vi.fn(() => mockWorkerInstance) as any;
-      try {
-        const worker = new workerThreadsModule.Worker('/test.js');
-        worker.postMessage('data', []);
-        expect(mockWorkerInstance.postMessage).toHaveBeenCalledWith('data', []);
-      } finally {
-        globalThis.Worker = OriginalWorker;
-      }
+      installMockWorker();
+      const worker = new workerThreadsModule.Worker('/test.js');
+      worker.postMessage('data', []);
+      expect(mockWorkerInstance.postMessage).toHaveBeenCalledWith('data', []);
     });
 
     it('should postMessage without transferList (uses ?? fallback)', () => {
-      const mockWorkerInstance: any = {
-        onmessage: null,
-        onerror: null,
-        postMessage: vi.fn(),
-        terminate: vi.fn(),
-      };
-      const OriginalWorker = globalThis.Worker;
-      globalThis.Worker = vi.fn(() => mockWorkerInstance) as any;
-      try {
-        const worker = new workerThreadsModule.Worker('/test.js');
-        worker.postMessage('data');
-        expect(mockWorkerInstance.postMessage).toHaveBeenCalledWith('data', []);
-      } finally {
-        globalThis.Worker = OriginalWorker;
-      }
+      installMockWorker();
+      const worker = new workerThreadsModule.Worker('/test.js');
+      worker.postMessage('data');
+      expect(mockWorkerInstance.postMessage).toHaveBeenCalledWith('data', []);
     });
 
     it('should terminate native worker', async () => {
-      const mockWorkerInstance: any = {
-        onmessage: null,
-        onerror: null,
-        postMessage: vi.fn(),
-        terminate: vi.fn(),
-      };
-      const OriginalWorker = globalThis.Worker;
-      globalThis.Worker = vi.fn(() => mockWorkerInstance) as any;
-      try {
-        const worker = new workerThreadsModule.Worker('/test.js');
-        const code = await worker.terminate();
-        expect(code).toBe(0);
-        expect(mockWorkerInstance.terminate).toHaveBeenCalled();
-      } finally {
-        globalThis.Worker = OriginalWorker;
-      }
+      installMockWorker();
+      const worker = new workerThreadsModule.Worker('/test.js');
+      const code = await worker.terminate();
+      expect(code).toBe(0);
+      expect(mockWorkerInstance.terminate).toHaveBeenCalled();
     });
   });
 });

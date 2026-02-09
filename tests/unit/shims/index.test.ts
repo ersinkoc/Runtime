@@ -107,6 +107,13 @@ describe('shim registry', () => {
     expect(shims.has('vm')).toBe(false);
   });
 
+  it('should ignore unknown shim names in custom tier', () => {
+    const shims = getShims({ tier: 'custom', include: ['path', 'nonexistent_module'] });
+    expect(shims.has('path')).toBe(true);
+    expect(shims.has('nonexistent_module')).toBe(false);
+    expect(shims.size).toBe(1);
+  });
+
   it('should return undefined for non-string Symbol prop on stub', () => {
     const shims = getShims({ tier: 'full' });
     const stub = shims.get('tls') as any;

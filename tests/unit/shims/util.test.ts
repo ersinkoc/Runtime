@@ -262,10 +262,15 @@ describe('util shim', () => {
   });
 
   describe('format with extra args', () => {
-    it('should handle more args than format specifiers', () => {
+    it('should append remaining args after format specifiers', () => {
       const result = format('%s', 'hello', 'extra1', 42);
-      // Extra args don't get appended in this implementation
-      expect(result).toBe('hello');
+      expect(result).toBe('hello extra1 42');
+    });
+
+    it('should inspect object extra args', () => {
+      const result = format('%s', 'hello', { a: 1 });
+      expect(result).toContain('hello');
+      expect(result).toContain('a');
     });
   });
 

@@ -16,6 +16,11 @@ describe('net shim', () => {
       expect(netModule.isIP('hello')).toBe(0);
       expect(netModule.isIP('')).toBe(0);
     });
+
+    it('should return 0 for out-of-range IPv4 octets', () => {
+      expect(netModule.isIP('999.0.0.1')).toBe(0);
+      expect(netModule.isIP('0.0.0.256')).toBe(0);
+    });
   });
 
   describe('isIPv4 / isIPv6', () => {
@@ -63,6 +68,12 @@ describe('net shim', () => {
       const socket = new netModule.Socket();
       const cb = vi.fn();
       const result = socket.setTimeout(5000, cb);
+      expect(result).toBe(socket);
+    });
+
+    it('should support setTimeout without callback', () => {
+      const socket = new netModule.Socket();
+      const result = socket.setTimeout(1000);
       expect(result).toBe(socket);
     });
   });

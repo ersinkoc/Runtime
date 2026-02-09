@@ -122,6 +122,18 @@ describe('console shim', () => {
     expect(entries[0]!.timestamp).toBeGreaterThan(0);
   });
 
+  it('should ignore timeEnd for non-existent timer', () => {
+    const { console: con, entries } = createConsoleCapture();
+    con.timeEnd('nonexistent');
+    expect(entries).toHaveLength(0);
+  });
+
+  it('should ignore timeLog for non-existent timer', () => {
+    const { console: con, entries } = createConsoleCapture();
+    con.timeLog('nonexistent', 'extra');
+    expect(entries).toHaveLength(0);
+  });
+
   it('should handle group/groupEnd without error', () => {
     const { console: con } = createConsoleCapture();
     expect(() => {

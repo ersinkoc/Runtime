@@ -63,6 +63,13 @@ describe('Buffer', () => {
       const buf = Buffer.alloc(5, 'ab');
       expect(buf.toString()).toBe('ababa');
     });
+
+    it('should ignore empty string fill', () => {
+      const buf = Buffer.alloc(3, '');
+      expect(buf[0]).toBe(0);
+      expect(buf[1]).toBe(0);
+      expect(buf[2]).toBe(0);
+    });
   });
 
   describe('allocUnsafe', () => {

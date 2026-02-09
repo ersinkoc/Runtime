@@ -23,6 +23,10 @@ describe('resolveModule', () => {
     expect(resolveModule('node:path', '/app.js', vfs, builtins)).toBe('__builtin__:path');
   });
 
+  it('should not resolve unknown node: prefixed specifiers as builtins', () => {
+    expect(() => resolveModule('node:nonexistent', '/app.js', vfs, builtins)).toThrow('Cannot find module');
+  });
+
   it('should resolve relative files', () => {
     vfs.mkdirSync('/app', { recursive: true });
     vfs.writeFileSync('/app/utils.js', 'module.exports = {};');
@@ -129,6 +133,20 @@ describe('resolveModule', () => {
     expect(resolveModule('bad-exp', '/app.js', vfs, builtins)).toBe('/node_modules/bad-exp/fallback.js');
   });
 
+  it('should fallback from main to index when main file is missing', () => {
+    vfs.mkdirSync('/node_modules/main-miss', { recursive: true });
+    vfs.writeFileSync('/node_modules/main-miss/package.json', JSON.stringify({ main: './missing.js' }));
+    vfs.writeFileSync('/node_modules/main-miss/index.js', '');
+    expect(resolveModule('main-miss', '/app.js', vfs, builtins)).toBe('/node_modules/main-miss/index.js');
+  });
+
+  it('should fallback from module to index when module file is missing', () => {
+    vfs.mkdirSync('/node_modules/mod-miss', { recursive: true });
+    vfs.writeFileSync('/node_modules/mod-miss/package.json', JSON.stringify({ module: './missing.mjs' }));
+    vfs.writeFileSync('/node_modules/mod-miss/index.js', '');
+    expect(resolveModule('mod-miss', '/app.js', vfs, builtins)).toBe('/node_modules/mod-miss/index.js');
+  });
+
   it('should handle invalid package.json in node_modules', () => {
     vfs.mkdirSync('/node_modules/broken', { recursive: true });
     vfs.writeFileSync('/node_modules/broken/package.json', 'not json{{{');
@@ -218,6 +236,16 @@ describe('resolveExports', () => {
   it('should return null for conditions object with non-. subpath', () => {
     const exports = { import: './index.mjs' };
     expect(resolveExports(exports, './sub', conditions)).toBeNull();
+  });
+
+  it('should return null when nested condition resolves to null', () => {
+    const exports = { import: { worker: './worker.js' } };
+    expect(resolveExports(exports, '.', ['import', 'browser'])).toBeNull();
+  });
+
+  it('should skip wildcard pattern when value is not a string', () => {
+    const exports = { './*': { import: './src/*.mjs' } };
+    expect(resolveExports(exports, './utils', conditions)).toBeNull();
   });
 });
 

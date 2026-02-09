@@ -25,14 +25,8 @@ export function format(fmt: unknown, ...args: unknown[]): string {
   });
 
   // Append remaining args
-  while (i < args.length) {
-    const arg = args[i++];
-    if (arg === null || typeof arg !== 'object') {
-      result; // handled below
-    }
-  }
-
-  return result;
+  const rest = args.slice(i).map(a => typeof a === 'object' && a !== null ? inspect(a) : String(a));
+  return rest.length > 0 ? result + ' ' + rest.join(' ') : result;
 }
 
 export function inspect(obj: unknown, opts?: { depth?: number; colors?: boolean }): string {

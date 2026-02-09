@@ -20,4 +20,4 @@ All notable changes to this project will be documented in this file.
 - **Runtime API** — `createRuntime()` and `createContainer()` factory functions
 - **Pure-JS crypto** — MD5, SHA-1, SHA-256 hash implementations + HMAC
 - **Zero runtime dependencies** — everything from scratch
-- **1242 tests** across 52 test files — 100% coverage (statements, branches, functions, lines)
+- **1267 tests** across 52 test files — 100% coverage (statements, branches, functions, lines)

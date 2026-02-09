@@ -139,9 +139,10 @@ export function createRuntime(options?: RuntimeOptions): Runtime {
 
     execute(code: string, filename?: string): ExecuteResult {
       const fname = filename ?? `/__exec_${Date.now()}.js`;
+      const onConsole = options?.onConsole;
       const { console: capturedConsole, entries } = createConsoleCapture(
-        options?.onConsole
-          ? (entry) => options.onConsole!(entry.method, entry.args)
+        onConsole
+          ? (entry) => onConsole(entry.method, entry.args)
           : undefined,
       );
 

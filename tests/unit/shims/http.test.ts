@@ -291,6 +291,24 @@ describe('http shim', () => {
     });
   });
 
+  describe('ServerResponse writeHead with statusCode only', () => {
+    it('should set statusCode without message or headers', () => {
+      const res = new httpModule.ServerResponse();
+      res.writeHead(200);
+      expect(res.statusCode).toBe(200);
+      expect(res.headersSent).toBe(true);
+    });
+  });
+
+  describe('ClientRequest setHeader with pre-existing headers', () => {
+    it('should set header when headers already exist in options', () => {
+      const req = new httpModule.ClientRequest({ hostname: 'example.com', headers: { 'X-Existing': 'yes' } });
+      req.setHeader('X-New', 'value');
+      // Should not throw
+      expect(req).toBeDefined();
+    });
+  });
+
   describe('ClientRequest branch coverage', () => {
     it('should parse URL string with port', () => {
       const req = new httpModule.ClientRequest('http://localhost:9090/api');

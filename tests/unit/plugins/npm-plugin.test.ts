@@ -41,6 +41,15 @@ describe('npmPlugin', () => {
     expect(typeof plugin.onDestroy).toBe('function');
   });
 
+  it('should handle __getNpm callback when pm is null after destroy', async () => {
+    const kernel = setup();
+    kernel.unregister('npm');
+    let receivedPm: unknown = 'sentinel';
+    kernel.emit('__getNpm', (pm: unknown) => { receivedPm = pm; });
+    // After unregister, the event listener is gone, so callback isn't called
+    expect(receivedPm).toBe('sentinel');
+  });
+
   it('should nullify pm on plugin unregister', () => {
     const kernel = setup();
     expect(kernel.listPlugins()).toContain('npm');

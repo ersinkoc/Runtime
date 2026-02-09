@@ -195,4 +195,10 @@ describe('transformPlugin', () => {
     expect(result).toContain('React.createElement');
     expect(result).toContain('name');
   });
+
+  it('should ignore beforeExecute with non-string args', () => {
+    const kernel = setup();
+    // Emit beforeExecute with non-string args — transform should skip
+    expect(() => kernel.emit('beforeExecute', 123, null)).not.toThrow();
+  });
 });

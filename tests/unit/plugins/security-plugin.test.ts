@@ -84,6 +84,14 @@ describe('securityPlugin', () => {
     expect(globals).toHaveProperty('Math');
   });
 
+  it('should skip non-existent globals in createSandboxGlobals', () => {
+    const kernel = setup({ mode: 'sandbox', allowedGlobals: ['Array', '__nonexistent_global_xyz__'] });
+    const security = (kernel as any)._security;
+    const globals = security.createSandboxGlobals();
+    expect(globals).toHaveProperty('Array');
+    expect(globals).not.toHaveProperty('__nonexistent_global_xyz__');
+  });
+
   it('should block execution in locked mode', () => {
     const kernel = setup({ mode: 'locked' });
     let allowed = true;

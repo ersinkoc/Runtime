@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue.svg)](tsconfig.json)
 [![Coverage](https://img.shields.io/badge/Coverage-100%25-brightgreen.svg)](vitest.config.ts)
-[![Tests](https://img.shields.io/badge/Tests-1242_passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-1267_passing-brightgreen.svg)](tests/)
 
 ## Features
 
@@ -231,7 +231,7 @@ User Code -> createRuntime({ plugins: [...] })
 
 ```bash
 npm install          # Install dev dependencies
-npm test             # Run 1242 tests
+npm test             # Run 1267 tests
 npm run test:coverage # Run with 100% coverage enforcement
 npm run build        # Build CJS + ESM + .d.ts
 npm run typecheck    # TypeScript strict check
@@ -254,7 +254,7 @@ src/               # Source code (52 files, ~8K lines)
   transform/       # TypeScript/JSX compilation pipeline
   security/        # Worker + sandbox executors
   utils/           # FNV-1a hash, encoding helpers
-tests/             # 1242 tests across 52 files
+tests/             # 1267 tests across 52 files
 examples/          # 6 example projects + interactive web demos
 docs/              # Specification, architecture, references
 ```

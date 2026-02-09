@@ -221,6 +221,19 @@ describe('stream shim', () => {
       expect(chunks).toEqual(['chunk1', 'chunk2']);
     });
 
+    it('should support return() on async iterator to signal done', async () => {
+      const readable = new Readable();
+      const iter = readable[Symbol.asyncIterator]();
+      const result = await iter.return!();
+      expect(result.done).toBe(true);
+    });
+
+    it('should support Symbol.asyncIterator on the iterator itself', async () => {
+      const readable = new Readable();
+      const iter = readable[Symbol.asyncIterator]();
+      expect(iter[Symbol.asyncIterator]()).toBe(iter);
+    });
+
     it('should resolve pending next() when end fires', async () => {
       const readable = new Readable();
       const iter = readable[Symbol.asyncIterator]();

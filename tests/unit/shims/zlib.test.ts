@@ -93,6 +93,22 @@ describe('zlib shim', () => {
     });
   });
 
+  describe('callback error wrapping', () => {
+    it('should wrap non-Error rejection in Error for callback', async () => {
+      const OrigCS = globalThis.CompressionStream;
+      globalThis.CompressionStream = function () { throw 'string error'; } as any;
+      try {
+        const result = await new Promise<Error | null>((resolve) => {
+          zlibModule.gzip('test', (err) => resolve(err));
+        });
+        expect(result).toBeInstanceOf(Error);
+        expect(result!.message).toBe('string error');
+      } finally {
+        globalThis.CompressionStream = OrigCS;
+      }
+    });
+  });
+
   describe('brotli callback mode', () => {
     it('should call callback with error for brotliCompress', async () => {
       const result = await new Promise<{ err: Error | null }>((resolve) => {
