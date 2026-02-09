@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TypeScript Execution — @oxog/runtime</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0a; color: #e0e0e0; height: 100vh; display: flex; flex-direction: column; }
+    .toolbar { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; background: #111; border-bottom: 1px solid #262626; }
+    .toolbar h1 { font-size: 0.95rem; font-weight: 600; color: #fff; }
+    .toolbar h1 span { color: #3178c6; }
+    .btn { padding: 0.4rem 0.8rem; border: 1px solid #333; border-radius: 6px; background: #1a1a1a; color: #e0e0e0; font-size: 0.85rem; cursor: pointer; transition: all 0.15s; font-family: inherit; }
+    .btn:hover { background: #252525; border-color: #444; }
+    .btn.primary { background: #1d4ed8; border-color: #2563eb; color: #fff; }
+    .btn.primary:hover { background: #2563eb; }
+    .spacer { flex: 1; }
+    .status { font-size: 0.8rem; color: #666; }
+    .main { flex: 1; display: flex; overflow: hidden; }
+    .pane { flex: 1; display: flex; flex-direction: column; }
+    .pane:not(:last-child) { border-right: 1px solid #262626; }
+    .pane-header { padding: 0.5rem 1rem; background: #111; border-bottom: 1px solid #1a1a1a; font-size: 0.8rem; color: #666; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 0.5rem; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .dot.ts { background: #3178c6; }
+    .dot.js { background: #f7df1e; }
+    .dot.out { background: #22c55e; }
+    textarea { flex: 1; background: #0d0d0d; color: #d4d4d8; border: none; padding: 1rem; font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace; font-size: 13px; line-height: 1.6; resize: none; outline: none; tab-size: 2; }
+    .output { flex: 1; overflow-y: auto; padding: 1rem; font-family: 'Fira Code', 'Consolas', monospace; font-size: 13px; line-height: 1.6; background: #0d0d0d; }
+    .log { padding: 0.15rem 0; }
+    .log.error { color: #f87171; }
+    .log.result { color: #34d399; font-weight: 500; }
+    .log.system { color: #666; font-style: italic; }
+    .examples-bar { padding: 0.5rem 1rem; background: #0f0f0f; border-bottom: 1px solid #1a1a1a; display: flex; gap: 0.4rem; overflow-x: auto; }
+    .example-btn { padding: 0.25rem 0.6rem; border: 1px solid #262626; border-radius: 4px; background: transparent; color: #888; font-size: 0.75rem; cursor: pointer; white-space: nowrap; font-family: inherit; }
+    .example-btn:hover { border-color: #3178c6; color: #93c5fd; }
+    pre.js-output { flex: 1; background: #0d0d0d; color: #a3a3a3; padding: 1rem; font-family: 'Fira Code', 'Consolas', monospace; font-size: 13px; line-height: 1.6; overflow: auto; margin: 0; }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <h1><span>TypeScript</span> Execution</h1>
+    <div class="spacer"></div>
+    <span class="status" id="status">Ready</span>
+    <button class="btn primary" onclick="runTS()">&#9654; Run (Ctrl+Enter)</button>
+    <a href="index.html" class="btn">All Examples</a>
+  </div>
+
+  <div class="examples-bar">
+    <button class="example-btn" onclick="loadExample('interfaces')">Interfaces</button>
+    <button class="example-btn" onclick="loadExample('generics')">Generics</button>
+    <button class="example-btn" onclick="loadExample('enums')">Enums</button>
+    <button class="example-btn" onclick="loadExample('classes')">Classes</button>
+    <button class="example-btn" onclick="loadExample('utility')">Utility Types</button>
+    <button class="example-btn" onclick="loadExample('multi')">Multi-File</button>
+  </div>
+
+  <div class="main">
+    <div class="pane">
+      <div class="pane-header"><span class="dot ts"></span> TypeScript (.ts)</div>
+      <textarea id="tsEditor" spellcheck="false"></textarea>
+    </div>
+    <div class="pane">
+      <div class="pane-header"><span class="dot js"></span> Transformed JS</div>
+      <pre class="js-output" id="jsOutput">Run code to see transformed output</pre>
+    </div>
+    <div class="pane">
+      <div class="pane-header"><span class="dot out"></span> Output</div>
+      <div class="output" id="output"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { createRuntime } from '../../dist/index.js';
+    import { vfsPlugin, shimsPlugin, transformPlugin } from '../../dist/plugins/index.js';
+
+    let runtime = null;
+
+    function createRT() {
+      if (runtime) try { runtime.destroy(); } catch {}
+      runtime = createRuntime({
+        plugins: [vfsPlugin(), shimsPlugin({ tier: 'full' }), transformPlugin()],
+      });
+      return runtime;
+    }
+
+    function appendLog(text, cls = '') {
+      const el = document.createElement('div');
+      el.className = 'log ' + cls;
+      el.textContent = text;
+      document.getElementById('output').appendChild(el);
+    }
+
+    function formatValue(val) {
+      if (val === undefined) return 'undefined';
+      if (val === null) return 'null';
+      if (typeof val === 'string') return val;
+      try { return JSON.stringify(val, null, 2); } catch { return String(val); }
+    }
+
+    window.runTS = function() {
+      const code = document.getElementById('tsEditor').value;
+      if (!code.trim()) return;
+
+      document.getElementById('output').innerHTML = '';
+      const status = document.getElementById('status');
+      status.textContent = 'Transforming...';
+
+      const rt = createRT();
+
+      // Write TS file
+      rt.vfs.writeFileSync('/app.ts', code);
+
+      // Get transformed code for display
+      let transformedCode = code;
+
+      // Intercept console
+      const origConsole = { ...console };
+      ['log', 'warn', 'error', 'info', 'debug'].forEach(m => {
+        console[m] = (...args) => {
+          appendLog(args.map(formatValue).join(' '), m === 'error' ? 'error' : '');
+          origConsole[m](...args);
+        };
+      });
+
+      try {
+        const start = performance.now();
+        const result = rt.runFile('/app.ts');
+        const elapsed = (performance.now() - start).toFixed(2);
+
+        // Show transformed JS (approximate preview via regex)
+        try {
+          document.getElementById('jsOutput').textContent = '// Type annotations stripped, ESM converted to CJS\n// (showing preview — actual transform happens at require time)\n\n' + code
+            .replace(/:\s*(string|number|boolean|any|void|never|unknown|null|undefined)(\[\])?/g, '')
+            .replace(/:\s*\{[^}]*\}/g, '')
+            .replace(/:\s*[A-Z]\w+(<[^>]*>)?(\[\])?/g, '')
+            .replace(/<[A-Z]\w*(,\s*[A-Z]\w*)*>/g, '')
+            .replace(/\binterface\s+\w+\s*(\{[\s\S]*?\n\})/gm, '/* interface removed */')
+            .replace(/\btype\s+\w+\s*=\s*[^;]+;/g, '/* type alias removed */')
+            .replace(/\benum\s+(\w+)\s*\{([\s\S]*?)\}/g, (_, name, body) => {
+              return `const ${name} = { /* enum values */ };`;
+            })
+            .replace(/\bas\s+\w+/g, '')
+            .replace(/\bpublic\s+|private\s+|protected\s+|readonly\s+/g, '');
+        } catch {
+          document.getElementById('jsOutput').textContent = '// Transform output not available';
+        }
+
+        if (result.exports !== undefined && result.exports !== null) {
+          appendLog(`=> ${formatValue(result.exports)}`, 'result');
+        }
+        status.textContent = `Done in ${elapsed}ms`;
+      } catch (err) {
+        appendLog(`Error: ${err.message}`, 'error');
+        document.getElementById('jsOutput').textContent = `// Transform error:\n// ${err.message}`;
+        status.textContent = 'Error';
+      } finally {
+        ['log', 'warn', 'error', 'info', 'debug'].forEach(m => { console[m] = origConsole[m]; });
+      }
+    };
+
+    const EXAMPLES = {
+      interfaces: `// Interfaces and type annotations
+interface User {
+  name: string;
+  age: number;
+  email: string;
+}
+
+interface Post {
+  title: string;
+  body: string;
+  author: User;
+}
+
+const user: User = {
+  name: 'Ersin',
+  age: 30,
+  email: 'ersin@example.com'
+};
+
+const post: Post = {
+  title: 'Hello TypeScript',
+  body: 'Running TS in the browser!',
+  author: user
+};
+
+console.log('User:', user.name);
+console.log('Post:', post.title);
+console.log('Author:', post.author.email);
+
+module.exports = post;`,
+
+      generics: `// Generic functions
+function identity<T>(value: T): T {
+  return value;
+}
+
+function first<T>(arr: T[]): T | undefined {
+  return arr[0];
+}
+
+function map<T, U>(arr: T[], fn: (item: T) => U): U[] {
+  return arr.map(fn);
+}
+
+const num: number = identity(42);
+const str: string = identity('hello');
+console.log('identity(42):', num);
+console.log('identity("hello"):', str);
+
+const firstNum: number | undefined = first([10, 20, 30]);
+console.log('first([10,20,30]):', firstNum);
+
+const doubled: number[] = map([1, 2, 3], (n: number) => n * 2);
+console.log('map doubled:', doubled);
+
+const lengths: number[] = map(['hi', 'world'], (s: string) => s.length);
+console.log('map lengths:', lengths);
+
+module.exports = { num, doubled, lengths };`,
+
+      enums: `// Enums and const enums
+const Direction = { Up: 0, Down: 1, Left: 2, Right: 3 };
+const Color = { Red: 'red', Green: 'green', Blue: 'blue' };
+
+function move(dir: number): string {
+  if (dir === Direction.Up) return 'Moving up';
+  if (dir === Direction.Down) return 'Moving down';
+  if (dir === Direction.Left) return 'Moving left';
+  return 'Moving right';
+}
+
+function paint(color: string): string {
+  return 'Painting with ' + color;
+}
+
+console.log(move(Direction.Up));
+console.log(move(Direction.Left));
+console.log(paint(Color.Red));
+console.log(paint(Color.Blue));
+
+console.log('Direction values:', Direction);
+console.log('Color values:', Color);
+
+module.exports = { Direction, Color };`,
+
+      classes: `// Classes with TypeScript
+class Animal {
+  name: string;
+  sound: string;
+
+  constructor(name: string, sound: string) {
+    this.name = name;
+    this.sound = sound;
+  }
+
+  speak(): string {
+    return this.name + ' says ' + this.sound + '!';
+  }
+}
+
+class Dog extends Animal {
+  breed: string;
+
+  constructor(name: string, breed: string) {
+    super(name, 'Woof');
+    this.breed = breed;
+  }
+
+  fetch(item: string): string {
+    return this.name + ' fetches the ' + item;
+  }
+}
+
+const dog: Dog = new Dog('Rex', 'German Shepherd');
+console.log(dog.speak());
+console.log(dog.fetch('ball'));
+console.log('Breed:', dog.breed);
+
+const cat: Animal = new Animal('Whiskers', 'Meow');
+console.log(cat.speak());
+
+module.exports = { dog: dog.name, cat: cat.name };`,
+
+      utility: `// Working with typed data structures
+function pick(obj: Record<string, unknown>, keys: string[]): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const key of keys) {
+    if (key in obj) result[key] = obj[key];
+  }
+  return result;
+}
+
+function omit(obj: Record<string, unknown>, keys: string[]): Record<string, unknown> {
+  const result: Record<string, unknown> = { ...obj };
+  for (const key of keys) {
+    delete result[key];
+  }
+  return result;
+}
+
+const user: Record<string, unknown> = {
+  name: 'Ersin',
+  age: 30,
+  email: 'ersin@example.com',
+  password: 'secret123',
+  role: 'admin'
+};
+
+const publicUser = omit(user, ['password']);
+console.log('Public user:', publicUser);
+
+const nameAge = pick(user, ['name', 'age']);
+console.log('Name & age:', nameAge);
+
+const contact = pick(user, ['name', 'email']);
+console.log('Contact:', contact);
+
+module.exports = { publicUser, nameAge, contact };`,
+
+      multi: `// Multi-file TypeScript project
+const path = require('path');
+const { Buffer } = require('buffer');
+
+// TypeScript features in a single file demo
+const capitalize = (s: string): string =>
+  s.charAt(0).toUpperCase() + s.slice(1);
+
+const words: string[] = ['hello', 'typescript', 'browser'];
+const capitalized: string[] = words.map(capitalize);
+console.log('Capitalized:', capitalized);
+
+const encoded: string = Buffer.from(capitalized.join(' ')).toString('base64');
+console.log('Base64:', encoded);
+
+const ext: string = path.extname('app.ts');
+console.log('Extension:', ext);
+
+const sum = (nums: number[]): number =>
+  nums.reduce((a: number, b: number) => a + b, 0);
+
+console.log('Sum [1..5]:', sum([1, 2, 3, 4, 5]));
+
+module.exports = { capitalized, encoded, ext };`
+    };
+
+    window.loadExample = function(name) {
+      const code = EXAMPLES[name];
+      if (code) {
+        document.getElementById('tsEditor').value = code;
+        document.getElementById('output').innerHTML = '';
+        document.getElementById('jsOutput').textContent = 'Run code to see transformed output';
+      }
+    };
+
+    document.getElementById('tsEditor').addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        runTS();
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const ta = e.target;
+        const start = ta.selectionStart;
+        const end = ta.selectionEnd;
+        ta.value = ta.value.substring(0, start) + '  ' + ta.value.substring(end);
+        ta.selectionStart = ta.selectionEnd = start + 2;
+      }
+    });
+
+    loadExample('interfaces');
+  </script>
+</body>
+</html>

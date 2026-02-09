@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>@oxog/runtime — Examples</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0a; color: #e0e0e0; min-height: 100vh; }
+    .header { padding: 3rem 2rem 2rem; text-align: center; border-bottom: 1px solid #222; }
+    .header h1 { font-size: 2rem; font-weight: 700; color: #fff; }
+    .header h1 span { color: #3b82f6; }
+    .header p { margin-top: 0.5rem; color: #888; font-size: 1.1rem; }
+    .badges { margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; }
+    .badge { padding: 0.25rem 0.75rem; border-radius: 99px; font-size: 0.8rem; font-weight: 500; }
+    .badge.green { background: #065f46; color: #6ee7b7; }
+    .badge.blue { background: #1e3a5f; color: #93c5fd; }
+    .badge.purple { background: #3b1f6e; color: #c4b5fd; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 1.5rem; padding: 2rem; max-width: 1200px; margin: 0 auto; }
+    .card { background: #141414; border: 1px solid #262626; border-radius: 12px; padding: 1.5rem; transition: border-color 0.2s, transform 0.2s; cursor: pointer; text-decoration: none; color: inherit; display: block; }
+    .card:hover { border-color: #3b82f6; transform: translateY(-2px); }
+    .card .icon { font-size: 2rem; margin-bottom: 0.75rem; }
+    .card h2 { font-size: 1.15rem; font-weight: 600; color: #fff; margin-bottom: 0.5rem; }
+    .card p { color: #888; font-size: 0.9rem; line-height: 1.5; }
+    .card .tags { margin-top: 0.75rem; display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    .card .tag { padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.75rem; background: #1a1a2e; color: #7c8db5; }
+    .footer { text-align: center; padding: 2rem; color: #555; font-size: 0.85rem; border-top: 1px solid #222; }
+    .footer a { color: #3b82f6; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1><span>@oxog</span>/runtime</h1>
+    <p>Browser-Native Node.js Runtime — Interactive Examples</p>
+    <div class="badges">
+      <span class="badge green">Zero Dependencies</span>
+      <span class="badge blue">100% Coverage</span>
+      <span class="badge purple">1239 Tests</span>
+    </div>
+  </div>
+
+  <div class="grid">
+    <a class="card" href="playground.html">
+      <div class="icon">&#9654;</div>
+      <h2>Code Playground</h2>
+      <p>Interactive editor to write and execute Node.js code in the browser. Supports require(), Buffer, path, crypto, and 40+ modules.</p>
+      <div class="tags">
+        <span class="tag">createContainer</span>
+        <span class="tag">execute</span>
+        <span class="tag">console</span>
+      </div>
+    </a>
+
+    <a class="card" href="filesystem.html">
+      <div class="icon">&#128193;</div>
+      <h2>Virtual File System</h2>
+      <p>Explore the POSIX-like VFS. Create files, directories, read/write content, and see the file tree update in real-time.</p>
+      <div class="tags">
+        <span class="tag">VFS</span>
+        <span class="tag">mkdirSync</span>
+        <span class="tag">readFileSync</span>
+      </div>
+    </a>
+
+    <a class="card" href="typescript.html">
+      <div class="icon">&#9874;</div>
+      <h2>TypeScript Execution</h2>
+      <p>Write TypeScript with type annotations and run it directly. The transform plugin strips types automatically.</p>
+      <div class="tags">
+        <span class="tag">transformPlugin</span>
+        <span class="tag">.ts files</span>
+        <span class="tag">type stripping</span>
+      </div>
+    </a>
+
+    <a class="card" href="multi-file.html">
+      <div class="icon">&#128230;</div>
+      <h2>Multi-File Project</h2>
+      <p>Build a project with multiple files that require() each other. Demonstrates the module resolver, circular deps, and JSON imports.</p>
+      <div class="tags">
+        <span class="tag">require</span>
+        <span class="tag">node_modules</span>
+        <span class="tag">runFile</span>
+      </div>
+    </a>
+  </div>
+
+  <div class="footer">
+    <p>@oxog/runtime v1.0.0 &mdash; <a href="https://github.com/ersinkoc/runtime">GitHub</a></p>
+  </div>
+</body>
+</html>

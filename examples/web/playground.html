@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Code Playground — @oxog/runtime</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0a; color: #e0e0e0; height: 100vh; display: flex; flex-direction: column; }
+    .toolbar { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; background: #111; border-bottom: 1px solid #262626; }
+    .toolbar h1 { font-size: 0.95rem; font-weight: 600; color: #fff; }
+    .toolbar h1 span { color: #3b82f6; }
+    .btn { padding: 0.4rem 1rem; border: 1px solid #333; border-radius: 6px; background: #1a1a1a; color: #e0e0e0; font-size: 0.85rem; cursor: pointer; transition: all 0.15s; font-family: inherit; }
+    .btn:hover { background: #252525; border-color: #444; }
+    .btn.primary { background: #1d4ed8; border-color: #2563eb; color: #fff; }
+    .btn.primary:hover { background: #2563eb; }
+    .btn.danger { border-color: #7f1d1d; color: #fca5a5; }
+    .btn.danger:hover { background: #1a0a0a; }
+    .spacer { flex: 1; }
+    .status { font-size: 0.8rem; color: #666; }
+    .main { flex: 1; display: flex; overflow: hidden; }
+    .editor-pane, .output-pane { flex: 1; display: flex; flex-direction: column; }
+    .editor-pane { border-right: 1px solid #262626; }
+    .pane-header { padding: 0.5rem 1rem; background: #111; border-bottom: 1px solid #1a1a1a; font-size: 0.8rem; color: #666; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 0.5rem; }
+    .pane-header .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .dot.green { background: #22c55e; }
+    .dot.blue { background: #3b82f6; }
+    textarea { flex: 1; background: #0d0d0d; color: #d4d4d8; border: none; padding: 1rem; font-family: 'Fira Code', 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace; font-size: 14px; line-height: 1.6; resize: none; outline: none; tab-size: 2; }
+    textarea::placeholder { color: #444; }
+    .output { flex: 1; overflow-y: auto; padding: 1rem; font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace; font-size: 13px; line-height: 1.6; background: #0d0d0d; }
+    .log-entry { padding: 0.15rem 0; border-bottom: 1px solid #1a1a1a; }
+    .log-entry.error { color: #f87171; }
+    .log-entry.warn { color: #fbbf24; }
+    .log-entry.info { color: #60a5fa; }
+    .log-entry.result { color: #34d399; font-weight: 500; }
+    .log-entry.system { color: #666; font-style: italic; }
+    .examples-bar { padding: 0.5rem 1rem; background: #0f0f0f; border-bottom: 1px solid #1a1a1a; display: flex; gap: 0.4rem; overflow-x: auto; }
+    .example-btn { padding: 0.25rem 0.6rem; border: 1px solid #262626; border-radius: 4px; background: transparent; color: #888; font-size: 0.75rem; cursor: pointer; white-space: nowrap; font-family: inherit; }
+    .example-btn:hover { border-color: #3b82f6; color: #93c5fd; }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <h1><span>@oxog</span>/runtime</h1>
+    <div class="spacer"></div>
+    <span class="status" id="status">Ready</span>
+    <button class="btn primary" id="runBtn" onclick="runCode()">&#9654; Run</button>
+    <button class="btn danger" id="clearBtn" onclick="clearOutput()">Clear</button>
+    <a href="index.html" class="btn">All Examples</a>
+  </div>
+
+  <div class="examples-bar">
+    <button class="example-btn" onclick="loadExample('hello')">Hello World</button>
+    <button class="example-btn" onclick="loadExample('buffer')">Buffer</button>
+    <button class="example-btn" onclick="loadExample('path')">Path</button>
+    <button class="example-btn" onclick="loadExample('events')">EventEmitter</button>
+    <button class="example-btn" onclick="loadExample('crypto')">Crypto</button>
+    <button class="example-btn" onclick="loadExample('fs')">File System</button>
+    <button class="example-btn" onclick="loadExample('process')">Process</button>
+    <button class="example-btn" onclick="loadExample('stream')">Stream</button>
+    <button class="example-btn" onclick="loadExample('querystring')">QueryString</button>
+    <button class="example-btn" onclick="loadExample('assert')">Assert</button>
+  </div>
+
+  <div class="main">
+    <div class="editor-pane">
+      <div class="pane-header"><span class="dot green"></span> Editor</div>
+      <textarea id="editor" spellcheck="false" placeholder="Write Node.js code here..."></textarea>
+    </div>
+    <div class="output-pane">
+      <div class="pane-header"><span class="dot blue"></span> Output</div>
+      <div class="output" id="output"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { createContainer } from '../../dist/index.js';
+
+    let container = createContainer();
+
+    function formatValue(val) {
+      if (val === undefined) return 'undefined';
+      if (val === null) return 'null';
+      if (typeof val === 'string') return val;
+      try { return JSON.stringify(val, null, 2); }
+      catch { return String(val); }
+    }
+
+    function appendLog(text, className = '') {
+      const el = document.createElement('div');
+      el.className = 'log-entry ' + className;
+      el.textContent = text;
+      document.getElementById('output').appendChild(el);
+      el.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    window.clearOutput = function() {
+      document.getElementById('output').innerHTML = '';
+    };
+
+    window.runCode = function() {
+      const code = document.getElementById('editor').value;
+      if (!code.trim()) return;
+
+      const status = document.getElementById('status');
+      status.textContent = 'Running...';
+
+      // Reset container
+      try { container.destroy(); } catch {}
+      container = createContainer();
+
+      // Intercept console methods
+      const origConsole = { ...console };
+      const methods = ['log', 'warn', 'error', 'info', 'debug'];
+      methods.forEach(m => {
+        console[m] = (...args) => {
+          const text = args.map(formatValue).join(' ');
+          appendLog(text, m === 'error' ? 'error' : m === 'warn' ? 'warn' : m === 'info' ? 'info' : '');
+          origConsole[m](...args);
+        };
+      });
+
+      appendLog(`--- Run at ${new Date().toLocaleTimeString()} ---`, 'system');
+
+      try {
+        const start = performance.now();
+        const result = container.execute(code, '/playground.js');
+        const elapsed = (performance.now() - start).toFixed(2);
+
+        if (result.exports !== undefined && result.exports !== null && result.exports !== '') {
+          appendLog(`=> ${formatValue(result.exports)}`, 'result');
+        }
+        status.textContent = `Done in ${elapsed}ms`;
+      } catch (err) {
+        appendLog(`Error: ${err.message}`, 'error');
+        if (err.code) appendLog(`  Code: ${err.code}`, 'error');
+        if (err.suggestion) appendLog(`  Hint: ${err.suggestion}`, 'info');
+        status.textContent = 'Error';
+      } finally {
+        methods.forEach(m => { console[m] = origConsole[m]; });
+      }
+    };
+
+    // Ctrl+Enter to run
+    document.getElementById('editor').addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        runCode();
+      }
+      // Tab indent
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const ta = e.target;
+        const start = ta.selectionStart;
+        const end = ta.selectionEnd;
+        ta.value = ta.value.substring(0, start) + '  ' + ta.value.substring(end);
+        ta.selectionStart = ta.selectionEnd = start + 2;
+      }
+    });
+
+    const EXAMPLES = {
+      hello: `// Hello World
+const { Buffer } = require('buffer');
+const greeting = Buffer.from('Hello World!').toString('base64');
+console.log('Encoded:', greeting);
+console.log('Decoded:', Buffer.from(greeting, 'base64').toString());
+module.exports = greeting;`,
+
+      buffer: `// Buffer operations
+const { Buffer } = require('buffer');
+
+const buf = Buffer.alloc(16, 0);
+buf.writeUInt32BE(0xDEADBEEF, 0);
+buf.writeUInt32BE(0xCAFEBABE, 4);
+console.log('Hex:', buf.toString('hex'));
+
+const text = Buffer.from('Node.js in the browser!');
+console.log('Base64:', text.toString('base64'));
+console.log('Length:', text.length, 'bytes');
+
+const a = Buffer.from([1, 2, 3]);
+const b = Buffer.from([4, 5, 6]);
+const combined = Buffer.concat([a, b]);
+console.log('Concat:', Array.from(combined));`,
+
+      path: `// Path operations
+const path = require('path');
+
+console.log('join:', path.join('/users', 'ersin', 'projects', 'runtime'));
+console.log('dirname:', path.dirname('/app/src/index.ts'));
+console.log('basename:', path.basename('/app/src/index.ts'));
+console.log('extname:', path.extname('photo.jpg'));
+console.log('parse:', path.parse('/home/user/docs/file.txt'));
+console.log('relative:', path.relative('/app/src', '/app/dist/bundle.js'));
+console.log('resolve:', path.resolve('/app', 'src', '../dist'));
+console.log('isAbsolute:', path.isAbsolute('./relative'));
+console.log('normalize:', path.normalize('/app//src/../dist/./bundle.js'));`,
+
+      events: `// EventEmitter
+const { EventEmitter } = require('events');
+
+const emitter = new EventEmitter();
+let messageCount = 0;
+
+emitter.on('message', (data) => {
+  messageCount++;
+  console.log(\`Message #\${messageCount}: \${data}\`);
+});
+
+emitter.once('special', (data) => {
+  console.log('Special event (fires once):', data);
+});
+
+emitter.emit('message', 'Hello');
+emitter.emit('message', 'World');
+emitter.emit('special', 'First');
+emitter.emit('special', 'Second (not received)');
+
+console.log('Listener count:', emitter.listenerCount('message'));
+console.log('Event names:', emitter.eventNames());`,
+
+      crypto: `// Crypto operations
+const crypto = require('crypto');
+
+// UUID
+console.log('UUID:', crypto.randomUUID());
+
+// Random bytes
+const bytes = crypto.randomBytes(16);
+console.log('Random (hex):', bytes.toString('hex'));
+
+// Hashing
+const md5 = crypto.createHash('md5').update('hello').digest('hex');
+const sha1 = crypto.createHash('sha1').update('hello').digest('hex');
+const sha256 = crypto.createHash('sha256').update('hello').digest('hex');
+console.log('MD5:', md5);
+console.log('SHA1:', sha1);
+console.log('SHA256:', sha256);
+
+// HMAC
+const hmac = crypto.createHmac('sha256', 'secret-key')
+  .update('message')
+  .digest('hex');
+console.log('HMAC-SHA256:', hmac);`,
+
+      fs: `// File System
+const fs = require('fs');
+const path = require('path');
+
+// Create directory structure
+fs.mkdirSync('/project/src', { recursive: true });
+fs.mkdirSync('/project/dist', { recursive: true });
+
+// Write files
+fs.writeFileSync('/project/src/app.js', 'console.log("hello");');
+fs.writeFileSync('/project/src/utils.js', 'module.exports = {};');
+fs.writeFileSync('/project/package.json', JSON.stringify({ name: 'demo', version: '1.0.0' }, null, 2));
+
+// List files
+console.log('Files in /project:', fs.readdirSync('/project'));
+console.log('Files in /project/src:', fs.readdirSync('/project/src'));
+
+// Read file
+const content = fs.readFileSync('/project/package.json', 'utf8');
+console.log('package.json:', content);
+
+// File stats
+const stat = fs.statSync('/project/src/app.js');
+console.log('app.js size:', stat.size, 'bytes');
+console.log('Is file:', stat.isFile());
+console.log('Is directory:', stat.isDirectory());
+
+// Rename
+fs.renameSync('/project/src/utils.js', '/project/src/helpers.js');
+console.log('After rename:', fs.readdirSync('/project/src'));`,
+
+      process: `// Process information
+const process = require('process');
+
+console.log('cwd:', process.cwd());
+console.log('platform:', process.platform);
+console.log('arch:', process.arch);
+console.log('version:', process.version);
+console.log('pid:', process.pid);
+console.log('env.NODE_ENV:', process.env.NODE_ENV || '(not set)');
+
+// hrtime
+const start = process.hrtime();
+// simulate work
+for (let i = 0; i < 10000; i++) {}
+const diff = process.hrtime(start);
+console.log('Elapsed:', diff[0] + 's', (diff[1] / 1e6).toFixed(2) + 'ms');
+
+// nextTick
+let order = [];
+order.push('1-sync');
+process.nextTick(() => order.push('2-nextTick'));
+Promise.resolve().then(() => {
+  order.push('3-promise');
+  console.log('Execution order:', order);
+});`,
+
+      stream: `// Streams
+const { Readable, Writable, Transform } = require('stream');
+
+// Readable stream
+const readable = new Readable({
+  read() {
+    this.push('Hello ');
+    this.push('from ');
+    this.push('streams!');
+    this.push(null); // EOF
+  }
+});
+
+// Collect chunks
+const chunks = [];
+readable.on('data', chunk => chunks.push(chunk.toString()));
+readable.on('end', () => {
+  console.log('Readable output:', chunks.join(''));
+});
+
+// Transform stream (uppercase)
+const upper = new Transform({
+  transform(chunk, encoding, callback) {
+    callback(null, chunk.toString().toUpperCase());
+  }
+});
+
+const input = new Readable({
+  read() { this.push('transform me'); this.push(null); }
+});
+
+const result = [];
+input.pipe(upper);
+upper.on('data', d => result.push(d.toString()));
+upper.on('end', () => console.log('Transformed:', result.join('')));`,
+
+      querystring: `// QueryString
+const qs = require('querystring');
+
+// Parse
+const parsed = qs.parse('name=Ersin&lang=TypeScript&framework=React&framework=Vue');
+console.log('Parsed:', parsed);
+
+// Stringify
+const str = qs.stringify({ page: 1, limit: 20, sort: 'name', order: 'asc' });
+console.log('Stringified:', str);
+
+// Encode special chars
+const encoded = qs.stringify({ query: 'hello world', tag: 'a&b' });
+console.log('Encoded:', encoded);
+
+// Decode
+const decoded = qs.parse(encoded);
+console.log('Decoded:', decoded);`,
+
+      assert: `// Assert
+const assert = require('assert');
+
+// Basic assertions
+assert.ok(true, 'true is truthy');
+assert.strictEqual(1 + 1, 2, 'math works');
+assert.notStrictEqual('1', 1, 'strict comparison');
+
+// Deep equality
+assert.deepStrictEqual(
+  { a: 1, b: [2, 3] },
+  { a: 1, b: [2, 3] },
+  'deep equality'
+);
+
+// Throws
+assert.throws(
+  () => { throw new TypeError('bad'); },
+  TypeError,
+  'catches TypeError'
+);
+
+console.log('All 5 assertions passed!');
+
+// Intentional failure
+try {
+  assert.strictEqual(1, 2, 'this will fail');
+} catch (e) {
+  console.log('Expected failure:', e.message);
+}`
+    };
+
+    window.loadExample = function(name) {
+      const code = EXAMPLES[name];
+      if (code) {
+        document.getElementById('editor').value = code;
+        clearOutput();
+      }
+    };
+
+    // Load default example
+    loadExample('hello');
+  </script>
+</body>
+</html>

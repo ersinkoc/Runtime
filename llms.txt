@@ -1,0 +1,46 @@
+# @oxog/runtime
+
+> Browser-Native Node.js Runtime — Zero-dependency, plugin-based Node.js runtime that runs entirely in the browser.
+
+## What is this?
+
+@oxog/runtime is a complete Node.js-compatible runtime environment that runs in web browsers. It provides a virtual file system, module loader, 40+ Node.js API shims, and a plugin system for extensibility.
+
+## Architecture
+
+- **Micro-kernel**: Plugin registry + event bus (~4KB)
+- **VFS**: Tree-based virtual POSIX file system with symlinks, watchers, snapshots
+- **Module Loader**: Hybrid CJS require() + ESM import() with node_modules resolution
+- **Shims**: 40+ Node.js module implementations using browser APIs
+- **Plugins**: npm client, TypeScript/JSX transforms, virtual HTTP server, security sandboxing, OPFS persistence
+
+## Key APIs
+
+```typescript
+// Quick start
+import { createContainer } from '@oxog/runtime';
+const container = createContainer();
+container.vfs.writeFileSync('/app.js', 'module.exports = require("path").join("/a", "b");');
+const result = container.runFile('/app.js'); // result.exports === '/a/b'
+
+// Custom runtime
+import { createRuntime } from '@oxog/runtime';
+import { vfsPlugin, shimsPlugin } from '@oxog/runtime/plugins';
+const runtime = createRuntime({ plugins: [vfsPlugin(), shimsPlugin()] });
+```
+
+## Supported Node.js Modules
+
+Tier 1 (full): path, buffer, events, fs, stream, http, https, url, crypto, util, os, process, querystring, zlib, assert, string_decoder, timers, console, tty, perf_hooks
+Tier 2 (partial): net, child_process, worker_threads
+Tier 3 (stubs): tls, dns, dgram, cluster, vm, v8, inspector, async_hooks, readline, repl, domain, punycode, sys, constants, module, trace_events, wasi
+
+## Technical Details
+
+- Zero runtime dependencies
+- TypeScript strict mode
+- Browser-native APIs: Uint8Array, TextEncoder/Decoder, crypto.subtle, CompressionStream, OPFS
+- Pure-JS crypto: MD5, SHA-1, SHA-256, HMAC
+- FNV-1a hashing for transform cache
+- Binary snapshot serialization for VFS
+- Semver resolver + tar parser from scratch

@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Multi-File Project — @oxog/runtime</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0a; color: #e0e0e0; height: 100vh; display: flex; flex-direction: column; }
+    .toolbar { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; background: #111; border-bottom: 1px solid #262626; }
+    .toolbar h1 { font-size: 0.95rem; font-weight: 600; color: #fff; }
+    .toolbar h1 span { color: #f59e0b; }
+    .btn { padding: 0.4rem 0.8rem; border: 1px solid #333; border-radius: 6px; background: #1a1a1a; color: #e0e0e0; font-size: 0.85rem; cursor: pointer; transition: all 0.15s; font-family: inherit; }
+    .btn:hover { background: #252525; border-color: #444; }
+    .btn.primary { background: #1d4ed8; border-color: #2563eb; color: #fff; }
+    .btn.primary:hover { background: #2563eb; }
+    .btn.success { background: #065f46; border-color: #059669; color: #6ee7b7; }
+    .btn.success:hover { background: #047857; }
+    .spacer { flex: 1; }
+    .status { font-size: 0.8rem; color: #666; }
+    .main { flex: 1; display: flex; overflow: hidden; }
+    .sidebar { width: 240px; border-right: 1px solid #262626; display: flex; flex-direction: column; }
+    .content { flex: 1; display: flex; flex-direction: column; }
+    .pane-header { padding: 0.5rem 1rem; background: #111; border-bottom: 1px solid #1a1a1a; font-size: 0.8rem; color: #666; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 0.5rem; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .dot.yellow { background: #f59e0b; }
+    .dot.green { background: #22c55e; }
+    .dot.blue { background: #3b82f6; }
+    .tree { flex: 1; overflow-y: auto; padding: 0.5rem; font-family: 'Fira Code', 'Consolas', monospace; font-size: 13px; }
+    .tree-item { padding: 0.25rem 0.5rem; cursor: pointer; border-radius: 4px; white-space: nowrap; display: flex; align-items: center; gap: 0.4rem; }
+    .tree-item:hover { background: #1a1a1a; }
+    .tree-item.selected { background: #1e3a5f; color: #93c5fd; }
+    .tree-item .icon { width: 16px; text-align: center; flex-shrink: 0; font-size: 12px; }
+    .tree-item.dir .icon { color: #fbbf24; }
+    .tree-item.file .icon { color: #888; }
+    .tree-item .indent { display: inline-block; }
+    .tree-actions { padding: 0.5rem; border-top: 1px solid #262626; display: flex; gap: 0.4rem; }
+    .tree-actions .btn { flex: 1; text-align: center; font-size: 0.75rem; padding: 0.3rem; }
+    .editor-area { flex: 1; display: flex; flex-direction: column; }
+    .tab-bar { display: flex; background: #111; border-bottom: 1px solid #262626; overflow-x: auto; }
+    .tab { padding: 0.4rem 1rem; font-size: 0.8rem; color: #666; cursor: pointer; border-right: 1px solid #1a1a1a; white-space: nowrap; display: flex; align-items: center; gap: 0.4rem; font-family: inherit; background: transparent; border-top: none; border-bottom: none; border-left: none; }
+    .tab:hover { color: #aaa; background: #151515; }
+    .tab.active { color: #fff; background: #0d0d0d; border-bottom: 2px solid #3b82f6; }
+    .tab .close { font-size: 0.7rem; opacity: 0.5; margin-left: 0.3rem; }
+    .tab .close:hover { opacity: 1; }
+    textarea.editor { flex: 1; background: #0d0d0d; color: #d4d4d8; border: none; padding: 1rem; font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace; font-size: 13px; line-height: 1.6; resize: none; outline: none; tab-size: 2; }
+    .output-pane { height: 200px; border-top: 1px solid #262626; display: flex; flex-direction: column; }
+    .output { flex: 1; overflow-y: auto; padding: 0.75rem 1rem; font-family: 'Fira Code', 'Consolas', monospace; font-size: 13px; line-height: 1.6; background: #0d0d0d; }
+    .log { padding: 0.1rem 0; }
+    .log.error { color: #f87171; }
+    .log.result { color: #34d399; font-weight: 500; }
+    .log.system { color: #666; font-style: italic; }
+    .log.warn { color: #fbbf24; }
+    .examples-bar { padding: 0.5rem 1rem; background: #0f0f0f; border-bottom: 1px solid #1a1a1a; display: flex; gap: 0.4rem; overflow-x: auto; }
+    .example-btn { padding: 0.25rem 0.6rem; border: 1px solid #262626; border-radius: 4px; background: transparent; color: #888; font-size: 0.75rem; cursor: pointer; white-space: nowrap; font-family: inherit; }
+    .example-btn:hover { border-color: #f59e0b; color: #fcd34d; }
+    .example-btn.active { border-color: #f59e0b; color: #fcd34d; background: #1a1508; }
+    .empty { display: flex; align-items: center; justify-content: center; flex: 1; color: #444; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <h1><span>Multi-File</span> Project</h1>
+    <div class="spacer"></div>
+    <span class="status" id="status">Ready</span>
+    <button class="btn primary" onclick="runProject()">&#9654; Run Entry Point</button>
+    <button class="btn" onclick="clearOutput()">Clear</button>
+    <a href="index.html" class="btn">All Examples</a>
+  </div>
+
+  <div class="examples-bar" id="examplesBar">
+    <button class="example-btn active" onclick="loadProject('basic')">Basic Require</button>
+    <button class="example-btn" onclick="loadProject('json')">JSON Import</button>
+    <button class="example-btn" onclick="loadProject('circular')">Circular Deps</button>
+    <button class="example-btn" onclick="loadProject('nodemodules')">node_modules</button>
+    <button class="example-btn" onclick="loadProject('layers')">Layered App</button>
+  </div>
+
+  <div class="main">
+    <div class="sidebar">
+      <div class="pane-header"><span class="dot yellow"></span> Files</div>
+      <div class="tree" id="tree"></div>
+      <div class="tree-actions">
+        <button class="btn" onclick="addFile()">+ File</button>
+        <button class="btn" onclick="deleteFile()">- Delete</button>
+      </div>
+    </div>
+    <div class="content">
+      <div class="tab-bar" id="tabBar"></div>
+      <div class="editor-area">
+        <textarea class="editor" id="editor" spellcheck="false" placeholder="Select a file to edit..."></textarea>
+      </div>
+      <div class="output-pane">
+        <div class="pane-header"><span class="dot green"></span> Output</div>
+        <div class="output" id="output"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { createRuntime } from '../../dist/index.js';
+    import { vfsPlugin, shimsPlugin } from '../../dist/plugins/index.js';
+
+    let runtime = null;
+    let selectedPath = null;
+    let openTabs = [];
+    let entryPoint = '/index.js';
+
+    function createRT() {
+      if (runtime) try { runtime.destroy(); } catch {}
+      runtime = createRuntime({
+        plugins: [vfsPlugin(), shimsPlugin({ tier: 'full' })],
+      });
+      return runtime;
+    }
+
+    function appendLog(text, cls = '') {
+      const el = document.createElement('div');
+      el.className = 'log ' + cls;
+      el.textContent = text;
+      document.getElementById('output').appendChild(el);
+      el.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function formatValue(val) {
+      if (val === undefined) return 'undefined';
+      if (val === null) return 'null';
+      if (typeof val === 'string') return val;
+      try { return JSON.stringify(val, null, 2); } catch { return String(val); }
+    }
+
+    window.clearOutput = function() {
+      document.getElementById('output').innerHTML = '';
+    };
+
+    // --- File tree ---
+    function buildTree(dirPath, depth = 0) {
+      const vfs = runtime.vfs;
+      const items = [];
+      try {
+        const entries = vfs.readdirSync(dirPath);
+        entries.sort((a, b) => {
+          const ap = (dirPath === '/' ? '' : dirPath) + '/' + a;
+          const bp = (dirPath === '/' ? '' : dirPath) + '/' + b;
+          const aIsDir = vfs.statSync(ap).isDirectory();
+          const bIsDir = vfs.statSync(bp).isDirectory();
+          if (aIsDir && !bIsDir) return -1;
+          if (!aIsDir && bIsDir) return 1;
+          return a.localeCompare(b);
+        });
+        for (const entry of entries) {
+          const fullPath = (dirPath === '/' ? '' : dirPath) + '/' + entry;
+          const stat = vfs.statSync(fullPath);
+          const isDir = stat.isDirectory();
+          items.push({ name: entry, path: fullPath, isDir, depth });
+          if (isDir) items.push(...buildTree(fullPath, depth + 1));
+        }
+      } catch {}
+      return items;
+    }
+
+    function refreshTree() {
+      if (!runtime) return;
+      const treeEl = document.getElementById('tree');
+      const items = buildTree('/');
+      if (items.length === 0) {
+        treeEl.innerHTML = '<div style="padding:1rem;color:#444;font-size:0.85rem">No files. Load a project.</div>';
+        return;
+      }
+      treeEl.innerHTML = items.map(item => {
+        const indent = '\u00a0\u00a0'.repeat(item.depth);
+        const icon = item.isDir ? '&#128193;' : '&#128196;';
+        const cls = `tree-item ${item.isDir ? 'dir' : 'file'} ${item.path === selectedPath ? 'selected' : ''}`;
+        const isEntry = item.path === entryPoint;
+        const badge = isEntry ? ' <span style="color:#22c55e;font-size:0.7rem">&#9654;</span>' : '';
+        return `<div class="${cls}" onclick="window._select('${item.path}', ${item.isDir})" ondblclick="window._setEntry('${item.path}')">
+          <span class="indent">${indent}</span>
+          <span class="icon">${icon}</span>
+          <span>${item.name}${badge}</span>
+        </div>`;
+      }).join('');
+    }
+
+    // --- Tabs ---
+    function refreshTabs() {
+      const tabBar = document.getElementById('tabBar');
+      tabBar.innerHTML = openTabs.map(path => {
+        const name = path.split('/').pop();
+        const cls = path === selectedPath ? 'tab active' : 'tab';
+        const isEntry = path === entryPoint;
+        const badge = isEntry ? '<span style="color:#22c55e;margin-right:0.2rem">&#9654;</span>' : '';
+        return `<button class="${cls}" onclick="window._select('${path}', false)">
+          ${badge}${name}
+          <span class="close" onclick="event.stopPropagation(); window._closeTab('${path}')">&#10005;</span>
+        </button>`;
+      }).join('');
+    }
+
+    window._closeTab = function(path) {
+      openTabs = openTabs.filter(t => t !== path);
+      if (selectedPath === path) {
+        selectedPath = openTabs[openTabs.length - 1] || null;
+        if (selectedPath) loadFileContent(selectedPath);
+        else document.getElementById('editor').value = '';
+      }
+      refreshTabs();
+      refreshTree();
+    };
+
+    function loadFileContent(path) {
+      try {
+        const content = runtime.vfs.readFileSync(path, 'utf8');
+        document.getElementById('editor').value = content;
+      } catch {
+        document.getElementById('editor').value = '// Cannot read file';
+      }
+    }
+
+    window._select = function(path, isDir) {
+      if (isDir) return;
+      selectedPath = path;
+      if (!openTabs.includes(path)) openTabs.push(path);
+      loadFileContent(path);
+      refreshTabs();
+      refreshTree();
+    };
+
+    window._setEntry = function(path) {
+      if (path.endsWith('/')) return;
+      entryPoint = path;
+      refreshTree();
+      refreshTabs();
+      appendLog(`Entry point set to: ${path}`, 'system');
+    };
+
+    // --- Save on edit ---
+    document.getElementById('editor').addEventListener('input', (e) => {
+      if (selectedPath && runtime) {
+        try { runtime.vfs.writeFileSync(selectedPath, e.target.value); } catch {}
+      }
+    });
+
+    document.getElementById('editor').addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        runProject();
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const ta = e.target;
+        const start = ta.selectionStart;
+        const end = ta.selectionEnd;
+        ta.value = ta.value.substring(0, start) + '  ' + ta.value.substring(end);
+        ta.selectionStart = ta.selectionEnd = start + 2;
+        if (selectedPath && runtime) {
+          try { runtime.vfs.writeFileSync(selectedPath, ta.value); } catch {}
+        }
+      }
+    });
+
+    // --- Run ---
+    window.runProject = function() {
+      if (!runtime) return;
+      const status = document.getElementById('status');
+      status.textContent = 'Running...';
+
+      // Save current editor content
+      if (selectedPath) {
+        try { runtime.vfs.writeFileSync(selectedPath, document.getElementById('editor').value); } catch {}
+      }
+
+      // Recreate runtime with same files
+      const files = collectFiles('/');
+      const rt = createRT();
+      for (const [path, content] of files) {
+        const dir = path.substring(0, path.lastIndexOf('/')) || '/';
+        try { rt.vfs.mkdirSync(dir, { recursive: true }); } catch {}
+        rt.vfs.writeFileSync(path, content);
+      }
+      runtime = rt;
+
+      // Intercept console
+      const origConsole = { ...console };
+      ['log', 'warn', 'error', 'info', 'debug'].forEach(m => {
+        console[m] = (...args) => {
+          appendLog(args.map(formatValue).join(' '), m === 'error' ? 'error' : m === 'warn' ? 'warn' : '');
+          origConsole[m](...args);
+        };
+      });
+
+      appendLog(`--- Run ${entryPoint} ---`, 'system');
+
+      try {
+        const start = performance.now();
+        const result = rt.runFile(entryPoint);
+        const elapsed = (performance.now() - start).toFixed(2);
+
+        if (result.exports !== undefined && result.exports !== null) {
+          const exported = formatValue(result.exports);
+          if (exported !== '{}') {
+            appendLog(`=> ${exported}`, 'result');
+          }
+        }
+        status.textContent = `Done in ${elapsed}ms`;
+      } catch (err) {
+        appendLog(`Error: ${err.message}`, 'error');
+        if (err.code) appendLog(`  Code: ${err.code}`, 'error');
+        status.textContent = 'Error';
+      } finally {
+        ['log', 'warn', 'error', 'info', 'debug'].forEach(m => { console[m] = origConsole[m]; });
+      }
+    };
+
+    function collectFiles(dirPath) {
+      const files = [];
+      try {
+        const entries = runtime.vfs.readdirSync(dirPath);
+        for (const entry of entries) {
+          const fullPath = (dirPath === '/' ? '' : dirPath) + '/' + entry;
+          const stat = runtime.vfs.statSync(fullPath);
+          if (stat.isDirectory()) {
+            files.push(...collectFiles(fullPath));
+          } else {
+            const content = runtime.vfs.readFileSync(fullPath, 'utf8');
+            files.push([fullPath, content]);
+          }
+        }
+      } catch {}
+      return files;
+    }
+
+    // --- Add / Delete ---
+    window.addFile = function() {
+      const path = prompt('File path (e.g. /src/helper.js):', '/');
+      if (!path) return;
+      const dir = path.substring(0, path.lastIndexOf('/')) || '/';
+      try { runtime.vfs.mkdirSync(dir, { recursive: true }); } catch {}
+      runtime.vfs.writeFileSync(path, '');
+      window._select(path, false);
+      refreshTree();
+    };
+
+    window.deleteFile = function() {
+      if (!selectedPath) return;
+      try {
+        const stat = runtime.vfs.statSync(selectedPath);
+        if (stat.isDirectory()) {
+          runtime.vfs.rmdirSync(selectedPath, { recursive: true });
+        } else {
+          runtime.vfs.unlinkSync(selectedPath);
+        }
+        window._closeTab(selectedPath);
+        selectedPath = null;
+        refreshTree();
+      } catch (e) { alert('Error: ' + e.message); }
+    };
+
+    // --- Projects ---
+    const PROJECTS = {
+      basic: {
+        entry: '/index.js',
+        files: {
+          '/index.js': `// Entry point — requires local modules
+const { greet } = require('./lib/greet');
+const { add, multiply } = require('./lib/math');
+
+console.log(greet('World'));
+console.log(greet('Browser'));
+
+console.log('2 + 3 =', add(2, 3));
+console.log('4 × 5 =', multiply(4, 5));
+
+const utils = require('./lib/utils');
+console.log('Uppercase:', utils.upper('hello runtime'));
+console.log('Repeat:', utils.repeat('ab', 3));
+
+module.exports = { greeting: greet('Runtime') };`,
+          '/lib/greet.js': `// Greeting module
+function greet(name) {
+  return 'Hello, ' + name + '!';
+}
+
+module.exports = { greet };`,
+          '/lib/math.js': `// Math utilities
+exports.add = (a, b) => a + b;
+exports.subtract = (a, b) => a - b;
+exports.multiply = (a, b) => a * b;
+exports.divide = (a, b) => {
+  if (b === 0) throw new Error('Division by zero');
+  return a / b;
+};`,
+          '/lib/utils.js': `// String utilities
+exports.upper = (s) => s.toUpperCase();
+exports.lower = (s) => s.toLowerCase();
+exports.capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+exports.repeat = (s, n) => s.repeat(n);`
+        }
+      },
+
+      json: {
+        entry: '/app.js',
+        files: {
+          '/app.js': `// JSON imports work with require()
+const pkg = require('./package.json');
+const config = require('./config.json');
+const users = require('./data/users.json');
+
+console.log('App:', pkg.name, 'v' + pkg.version);
+console.log('Environment:', config.env);
+console.log('Debug mode:', config.debug);
+console.log('API URL:', config.apiUrl);
+
+console.log('\\nUsers:');
+users.forEach(user => {
+  console.log('  -', user.name, '(' + user.role + ')');
+});
+
+const activeUsers = users.filter(u => u.active);
+console.log('\\nActive users:', activeUsers.length);
+
+module.exports = { pkg, config, users };`,
+          '/package.json': `{
+  "name": "my-json-app",
+  "version": "2.1.0",
+  "description": "Demo of JSON imports",
+  "main": "app.js"
+}`,
+          '/config.json': `{
+  "env": "development",
+  "debug": true,
+  "apiUrl": "https://api.example.com/v1",
+  "maxRetries": 3,
+  "timeout": 5000
+}`,
+          '/data/users.json': `[
+  { "name": "Ersin", "role": "admin", "active": true },
+  { "name": "Alice", "role": "editor", "active": true },
+  { "name": "Bob", "role": "viewer", "active": false },
+  { "name": "Charlie", "role": "editor", "active": true }
+]`
+        }
+      },
+
+      circular: {
+        entry: '/main.js',
+        files: {
+          '/main.js': `// Circular dependency demo
+// A requires B, B requires A — Node.js handles this gracefully
+const a = require('./moduleA');
+const b = require('./moduleB');
+
+console.log('Module A says:', a.getMessage());
+console.log('Module B says:', b.getMessage());
+console.log('A.value:', a.value);
+console.log('B.value:', b.value);
+
+// Both modules loaded successfully despite circular require
+console.log('\\nCircular deps handled correctly!');
+
+module.exports = { a: a.value, b: b.value };`,
+          '/moduleA.js': `// Module A — requires Module B
+const b = require('./moduleB');
+
+exports.value = 'I am A';
+
+exports.getMessage = function() {
+  return 'Hello from A (B.value = ' + b.value + ')';
+};`,
+          '/moduleB.js': `// Module B — requires Module A (circular!)
+const a = require('./moduleA');
+
+exports.value = 'I am B';
+
+exports.getMessage = function() {
+  return 'Hello from B (A.value = ' + a.value + ')';
+};`
+        }
+      },
+
+      nodemodules: {
+        entry: '/src/index.js',
+        files: {
+          '/src/index.js': `// Using packages from node_modules
+const leftPad = require('left-pad');
+const slugify = require('slugify');
+
+// left-pad usage
+console.log(leftPad('1', 5, '0'));    // 00001
+console.log(leftPad('hi', 8, '-'));   // ------hi
+console.log(leftPad('42', 4, ' '));   //   42
+
+// slugify usage
+console.log(slugify('Hello World'));
+console.log(slugify('Multi File Project Demo'));
+console.log(slugify('Special! @Chars# Removed'));
+
+module.exports = { leftPad, slugify };`,
+          '/node_modules/left-pad/index.js': `// Simple left-pad implementation
+module.exports = function leftPad(str, len, ch) {
+  str = String(str);
+  ch = String(ch || ' ');
+  while (str.length < len) {
+    str = ch + str;
+  }
+  return str;
+};`,
+          '/node_modules/slugify/index.js': `// Simple slugify implementation
+module.exports = function slugify(str) {
+  return str
+    .toLowerCase()
+    .trim()
+    .replace(/[^\\w\\s-]/g, '')
+    .replace(/[\\s_]+/g, '-')
+    .replace(/-+/g, '-');
+};`
+        }
+      },
+
+      layers: {
+        entry: '/src/app.js',
+        files: {
+          '/src/app.js': `// Layered application architecture
+const { UserService } = require('./services/user-service');
+const { formatTable } = require('./utils/formatter');
+
+const userService = new UserService();
+
+// Add users
+userService.add('Ersin', 'ersin@example.com');
+userService.add('Alice', 'alice@example.com');
+userService.add('Bob', 'bob@example.com');
+
+// List all users
+console.log('All users:');
+const allUsers = userService.list();
+console.log(formatTable(allUsers));
+
+// Find user
+const found = userService.find('Alice');
+console.log('\\nFound:', found.name, '-', found.email);
+
+// Stats
+console.log('\\nTotal users:', userService.count());
+
+module.exports = { users: allUsers };`,
+          '/src/services/user-service.js': `// User service — business logic layer
+const { generateId } = require('../utils/id');
+const { validate } = require('../utils/validator');
+
+class UserService {
+  constructor() {
+    this.users = [];
+  }
+
+  add(name, email) {
+    validate(name, 'Name is required');
+    validate(email, 'Email is required');
+    const user = { id: generateId(), name, email, createdAt: new Date().toISOString() };
+    this.users.push(user);
+    return user;
+  }
+
+  find(name) {
+    return this.users.find(u => u.name === name);
+  }
+
+  list() {
+    return this.users.map(u => ({ id: u.id, name: u.name, email: u.email }));
+  }
+
+  count() {
+    return this.users.length;
+  }
+}
+
+module.exports = { UserService };`,
+          '/src/utils/id.js': `// ID generator
+let counter = 0;
+
+exports.generateId = function() {
+  counter++;
+  return 'usr_' + counter.toString().padStart(4, '0');
+};
+
+exports.resetCounter = function() {
+  counter = 0;
+};`,
+          '/src/utils/validator.js': `// Simple validation utilities
+exports.validate = function(value, message) {
+  if (!value || (typeof value === 'string' && !value.trim())) {
+    throw new Error(message || 'Validation failed');
+  }
+  return true;
+};
+
+exports.isEmail = function(str) {
+  return /^[^@]+@[^@]+\\.[^@]+$/.test(str);
+};`,
+          '/src/utils/formatter.js': `// Output formatting
+exports.formatTable = function(items) {
+  if (!items.length) return '(empty)';
+  const keys = Object.keys(items[0]);
+  const widths = keys.map(k =>
+    Math.max(k.length, ...items.map(item => String(item[k]).length))
+  );
+  const header = keys.map((k, i) => k.padEnd(widths[i])).join('  ');
+  const separator = widths.map(w => '-'.repeat(w)).join('  ');
+  const rows = items.map(item =>
+    keys.map((k, i) => String(item[k]).padEnd(widths[i])).join('  ')
+  );
+  return [header, separator, ...rows].join('\\n');
+};`
+        }
+      }
+    };
+
+    window.loadProject = function(name) {
+      const project = PROJECTS[name];
+      if (!project) return;
+
+      // Highlight active example button
+      document.querySelectorAll('.example-btn').forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+
+      // Create fresh runtime
+      const rt = createRT();
+      runtime = rt;
+
+      // Write all project files
+      for (const [path, content] of Object.entries(project.files)) {
+        const dir = path.substring(0, path.lastIndexOf('/')) || '/';
+        try { rt.vfs.mkdirSync(dir, { recursive: true }); } catch {}
+        rt.vfs.writeFileSync(path, content);
+      }
+
+      entryPoint = project.entry;
+      selectedPath = null;
+      openTabs = [];
+
+      // Open entry file
+      window._select(project.entry, false);
+      refreshTree();
+
+      document.getElementById('output').innerHTML = '';
+      document.getElementById('status').textContent = 'Ready';
+    };
+
+    // --- Init ---
+    createRT();
+    loadProject('basic');
+  </script>
+</body>
+</html>

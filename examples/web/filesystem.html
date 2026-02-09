@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Virtual File System — @oxog/runtime</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0a; color: #e0e0e0; height: 100vh; display: flex; flex-direction: column; }
+    .toolbar { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; background: #111; border-bottom: 1px solid #262626; }
+    .toolbar h1 { font-size: 0.95rem; font-weight: 600; color: #fff; }
+    .toolbar h1 span { color: #3b82f6; }
+    .btn { padding: 0.4rem 0.8rem; border: 1px solid #333; border-radius: 6px; background: #1a1a1a; color: #e0e0e0; font-size: 0.85rem; cursor: pointer; transition: all 0.15s; font-family: inherit; }
+    .btn:hover { background: #252525; border-color: #444; }
+    .btn.primary { background: #1d4ed8; border-color: #2563eb; color: #fff; }
+    .btn.primary:hover { background: #2563eb; }
+    .spacer { flex: 1; }
+    .main { flex: 1; display: flex; overflow: hidden; }
+    .sidebar { width: 280px; border-right: 1px solid #262626; display: flex; flex-direction: column; }
+    .content { flex: 1; display: flex; flex-direction: column; }
+    .pane-header { padding: 0.5rem 1rem; background: #111; border-bottom: 1px solid #1a1a1a; font-size: 0.8rem; color: #666; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
+    .tree { flex: 1; overflow-y: auto; padding: 0.5rem; font-family: 'Fira Code', 'Consolas', monospace; font-size: 13px; }
+    .tree-item { padding: 0.2rem 0.4rem; cursor: pointer; border-radius: 4px; white-space: nowrap; display: flex; align-items: center; gap: 0.4rem; }
+    .tree-item:hover { background: #1a1a1a; }
+    .tree-item.selected { background: #1e3a5f; color: #93c5fd; }
+    .tree-item .icon { width: 16px; text-align: center; flex-shrink: 0; }
+    .tree-item.dir .icon { color: #fbbf24; }
+    .tree-item.file .icon { color: #888; }
+    .tree-item .indent { display: inline-block; }
+    .file-content { flex: 1; display: flex; flex-direction: column; }
+    .file-info { padding: 0.5rem 1rem; background: #0f0f0f; border-bottom: 1px solid #1a1a1a; font-size: 0.8rem; color: #666; display: flex; gap: 1.5rem; }
+    .file-info span { color: #888; }
+    textarea.editor { flex: 1; background: #0d0d0d; color: #d4d4d8; border: none; padding: 1rem; font-family: 'Fira Code', 'Consolas', monospace; font-size: 14px; line-height: 1.6; resize: none; outline: none; }
+    .actions { padding: 0.75rem 1rem; background: #111; border-top: 1px solid #262626; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .actions input { padding: 0.4rem 0.6rem; border: 1px solid #333; border-radius: 6px; background: #1a1a1a; color: #e0e0e0; font-size: 0.85rem; font-family: 'Fira Code', 'Consolas', monospace; flex: 1; min-width: 120px; outline: none; }
+    .actions input:focus { border-color: #3b82f6; }
+    .empty { flex: 1; display: flex; align-items: center; justify-content: center; color: #444; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <h1><span>VFS</span> Explorer</h1>
+    <div class="spacer"></div>
+    <button class="btn" onclick="loadDemo()">Load Demo Project</button>
+    <a href="index.html" class="btn">All Examples</a>
+  </div>
+
+  <div class="main">
+    <div class="sidebar">
+      <div class="pane-header">File Tree</div>
+      <div class="tree" id="tree"></div>
+    </div>
+    <div class="content">
+      <div class="pane-header" id="fileTitle">Select a file</div>
+      <div class="file-info" id="fileInfo" style="display:none">
+        <span id="fileSize"></span>
+        <span id="fileIno"></span>
+      </div>
+      <div class="file-content" id="fileContent">
+        <div class="empty">Select a file from the tree to view its contents</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <input type="text" id="pathInput" placeholder="/path/to/file.txt" value="/hello.txt">
+    <input type="text" id="contentInput" placeholder="File content..." value="Hello World!">
+    <button class="btn primary" onclick="createFile()">Create File</button>
+    <button class="btn" onclick="createDir()">Create Dir</button>
+    <button class="btn" onclick="deleteItem()">Delete</button>
+  </div>
+
+  <script type="module">
+    import { createRuntime } from '../../dist/index.js';
+    import { vfsPlugin } from '../../dist/plugins/index.js';
+
+    const runtime = createRuntime({ plugins: [vfsPlugin()] });
+    const vfs = runtime.vfs;
+    let selectedPath = null;
+
+    function buildTree(dirPath, depth = 0) {
+      const items = [];
+      try {
+        const entries = vfs.readdirSync(dirPath);
+        entries.sort((a, b) => {
+          const aIsDir = vfs.statSync((dirPath === '/' ? '' : dirPath) + '/' + a).isDirectory();
+          const bIsDir = vfs.statSync((dirPath === '/' ? '' : dirPath) + '/' + b).isDirectory();
+          if (aIsDir && !bIsDir) return -1;
+          if (!aIsDir && bIsDir) return 1;
+          return a.localeCompare(b);
+        });
+
+        for (const entry of entries) {
+          const fullPath = (dirPath === '/' ? '' : dirPath) + '/' + entry;
+          const stat = vfs.statSync(fullPath);
+          const isDir = stat.isDirectory();
+
+          items.push({ name: entry, path: fullPath, isDir, depth, size: stat.size });
+
+          if (isDir) {
+            items.push(...buildTree(fullPath, depth + 1));
+          }
+        }
+      } catch {}
+      return items;
+    }
+
+    function refreshTree() {
+      const treeEl = document.getElementById('tree');
+      const items = buildTree('/');
+
+      if (items.length === 0) {
+        treeEl.innerHTML = '<div style="padding:1rem;color:#444;font-size:0.85rem">Empty filesystem. Create files below.</div>';
+        return;
+      }
+
+      treeEl.innerHTML = items.map(item => {
+        const indent = '  '.repeat(item.depth);
+        const icon = item.isDir ? '&#128193;' : '&#128196;';
+        const cls = `tree-item ${item.isDir ? 'dir' : 'file'} ${item.path === selectedPath ? 'selected' : ''}`;
+        return `<div class="${cls}" data-path="${item.path}" data-dir="${item.isDir}" onclick="window._select('${item.path}', ${item.isDir})">
+          <span class="indent">${indent}</span>
+          <span class="icon">${icon}</span>
+          <span>${item.name}</span>
+        </div>`;
+      }).join('');
+    }
+
+    window._select = function(path, isDir) {
+      selectedPath = path;
+      document.getElementById('pathInput').value = path;
+      refreshTree();
+
+      const title = document.getElementById('fileTitle');
+      const info = document.getElementById('fileInfo');
+      const content = document.getElementById('fileContent');
+
+      title.textContent = path;
+
+      if (isDir) {
+        info.style.display = 'flex';
+        const entries = vfs.readdirSync(path);
+        document.getElementById('fileSize').textContent = `${entries.length} items`;
+        document.getElementById('fileIno').textContent = '';
+        content.innerHTML = '<div class="empty">Directory — ' + entries.length + ' items</div>';
+      } else {
+        const stat = vfs.statSync(path);
+        info.style.display = 'flex';
+        document.getElementById('fileSize').textContent = `${stat.size} bytes`;
+        document.getElementById('fileIno').textContent = `inode: ${stat.ino}`;
+
+        try {
+          const text = vfs.readFileSync(path, 'utf8');
+          content.innerHTML = `<textarea class="editor" id="editArea" spellcheck="false">${escapeHtml(text)}</textarea>`;
+          document.getElementById('editArea').addEventListener('input', (e) => {
+            vfs.writeFileSync(path, e.target.value);
+            refreshTree();
+          });
+        } catch {
+          content.innerHTML = '<div class="empty">Cannot read file</div>';
+        }
+      }
+    };
+
+    function escapeHtml(s) {
+      return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    window.createFile = function() {
+      const path = document.getElementById('pathInput').value.trim();
+      const content = document.getElementById('contentInput').value;
+      if (!path) return;
+      try {
+        // Ensure parent directories exist
+        const parts = path.split('/').filter(Boolean);
+        if (parts.length > 1) {
+          const dir = '/' + parts.slice(0, -1).join('/');
+          vfs.mkdirSync(dir, { recursive: true });
+        }
+        vfs.writeFileSync(path, content);
+        selectedPath = path;
+        refreshTree();
+        window._select(path, false);
+      } catch (e) { alert('Error: ' + e.message); }
+    };
+
+    window.createDir = function() {
+      const path = document.getElementById('pathInput').value.trim();
+      if (!path) return;
+      try {
+        vfs.mkdirSync(path, { recursive: true });
+        selectedPath = path;
+        refreshTree();
+        window._select(path, true);
+      } catch (e) { alert('Error: ' + e.message); }
+    };
+
+    window.deleteItem = function() {
+      if (!selectedPath) return;
+      try {
+        const stat = vfs.statSync(selectedPath);
+        if (stat.isDirectory()) {
+          vfs.rmdirSync(selectedPath, { recursive: true });
+        } else {
+          vfs.unlinkSync(selectedPath);
+        }
+        selectedPath = null;
+        refreshTree();
+        document.getElementById('fileTitle').textContent = 'Select a file';
+        document.getElementById('fileInfo').style.display = 'none';
+        document.getElementById('fileContent').innerHTML = '<div class="empty">File deleted</div>';
+      } catch (e) { alert('Error: ' + e.message); }
+    };
+
+    window.loadDemo = function() {
+      vfs.mkdirSync('/project/src', { recursive: true });
+      vfs.mkdirSync('/project/tests', { recursive: true });
+      vfs.writeFileSync('/project/package.json', JSON.stringify({
+        name: 'my-app',
+        version: '1.0.0',
+        main: 'src/index.js',
+        scripts: { start: 'node src/index.js', test: 'vitest' }
+      }, null, 2));
+      vfs.writeFileSync('/project/src/index.js',
+        'const { greet } = require("./utils");\nconsole.log(greet("World"));\n');
+      vfs.writeFileSync('/project/src/utils.js',
+        'exports.greet = (name) => `Hello, ${name}!`;\nexports.add = (a, b) => a + b;\n');
+      vfs.writeFileSync('/project/tests/utils.test.js',
+        'const { greet, add } = require("../src/utils");\nconsole.log(greet("Test") === "Hello, Test!");\nconsole.log(add(2, 3) === 5);\n');
+      vfs.writeFileSync('/project/README.md',
+        '# My App\n\nA demo project running in @oxog/runtime.\n');
+      refreshTree();
+    };
+
+    refreshTree();
+  </script>
+</body>
+</html>
