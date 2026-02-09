@@ -218,6 +218,28 @@ describe('fs shim', () => {
       expect(target.write).toHaveBeenCalled();
       expect(target.end).toHaveBeenCalled();
     });
+
+    it('should support custom highWaterMark for chunked reads', async () => {
+      fsModule.writeFileSync('/test/chunked.txt', 'abcdefghij'); // 10 bytes
+      const stream = fsModule.createReadStream('/test/chunked.txt', { highWaterMark: 4 });
+      const chunks: Uint8Array[] = [];
+      await new Promise<void>((resolve) => {
+        stream.on('data', (chunk: Uint8Array) => chunks.push(chunk));
+        stream.on('end', () => resolve());
+      });
+      expect(chunks.length).toBe(3); // 4 + 4 + 2
+      expect(chunks[0]!.length).toBe(4);
+      expect(chunks[1]!.length).toBe(4);
+      expect(chunks[2]!.length).toBe(2);
+    });
+
+    it('should handle stream with only end listener (no data listener)', async () => {
+      fsModule.writeFileSync('/test/endonly.txt', 'hello');
+      const stream = fsModule.createReadStream('/test/endonly.txt');
+      await new Promise<void>((resolve) => {
+        stream.on('end', () => resolve());
+      });
+    });
   });
 
   describe('createWriteStream', () => {

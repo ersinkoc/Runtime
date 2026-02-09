@@ -18,6 +18,19 @@ const EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.json', '.mjs', '.cjs'];
 const INDEX_FILES = ['index.ts', 'index.tsx', 'index.js', 'index.jsx', 'index.mjs', 'index.cjs'];
 
 /**
+ * Resolution cache — avoids redundant VFS lookups for repeated resolutions.
+ * Key format: `${specifier}\0${parentPath}`
+ */
+const resolutionCache = new Map<string, string>();
+
+/**
+ * Clear the resolution cache. Called when VFS state may have changed.
+ */
+export function clearResolutionCache(): void {
+  resolutionCache.clear();
+}
+
+/**
  * Resolve a module specifier to an absolute VFS path.
  *
  * @example
@@ -32,7 +45,7 @@ export function resolveModule(
   vfs: VirtualFS,
   builtins: Set<string>,
 ): string {
-  // 1. Built-in modules
+  // 1. Built-in modules (no caching needed — instant lookup)
   if (builtins.has(specifier)) {
     return `__builtin__:${specifier}`;
   }
@@ -45,11 +58,19 @@ export function resolveModule(
     }
   }
 
-  // 2. Relative or absolute paths
+  // 2. Check resolution cache
+  const cacheKey = specifier + '\0' + parentPath;
+  const cached = resolutionCache.get(cacheKey);
+  if (cached) return cached;
+
+  // 3. Relative or absolute paths
   if (specifier.startsWith('./') || specifier.startsWith('../') || specifier.startsWith('/')) {
     const base = specifier.startsWith('/') ? specifier : joinPath(dirname(parentPath), specifier);
     const resolved = tryResolveFile(normalizePath(base), vfs);
-    if (resolved) return resolved;
+    if (resolved) {
+      resolutionCache.set(cacheKey, resolved);
+      return resolved;
+    }
 
     throw new RuntimeError(
       `Cannot find module '${specifier}' from '${parentPath}'`,
@@ -58,8 +79,10 @@ export function resolveModule(
     );
   }
 
-  // 3. Bare specifier — node_modules traversal
-  return resolveFromNodeModules(specifier, parentPath, vfs);
+  // 4. Bare specifier — node_modules traversal
+  const resolved = resolveFromNodeModules(specifier, parentPath, vfs);
+  resolutionCache.set(cacheKey, resolved);
+  return resolved;
 }
 
 /**

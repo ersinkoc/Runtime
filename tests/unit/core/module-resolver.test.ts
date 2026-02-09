@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { resolveModule, resolveExports, getModuleFormat } from '../../../src/core/module-resolver.js';
+import { resolveModule, resolveExports, getModuleFormat, clearResolutionCache } from '../../../src/core/module-resolver.js';
 import { VirtualFS } from '../../../src/vfs/virtual-fs.js';
 import { resetInodeCounter } from '../../../src/vfs/fs-node.js';
 import { RuntimeError } from '../../../src/errors.js';
@@ -10,6 +10,7 @@ describe('resolveModule', () => {
 
   beforeEach(() => {
     resetInodeCounter();
+    clearResolutionCache();
     vfs = new VirtualFS();
   });
 

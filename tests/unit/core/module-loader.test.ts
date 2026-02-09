@@ -195,6 +195,14 @@ describe('createModuleLoader', () => {
       }
     });
 
+    it('should cache ESM import results on repeated calls', async () => {
+      const loader = createModuleLoader(kernel);
+      vfs.writeFileSync('/cached.js', 'module.exports = { val: 123 };');
+      const first = await loader.import('/cached.js', '/');
+      const second = await loader.import('/cached.js', '/');
+      expect(first).toBe(second);
+    });
+
     it('should resolve builtins directly', async () => {
       const loader = createModuleLoader(kernel);
       const mockPath = { join: () => 'joined' };

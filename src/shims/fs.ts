@@ -84,31 +84,39 @@ export function readlinkSync(path: string): string {
   return getVFS().readlinkSync(path);
 }
 
-// Async promise wrappers
+// Async promise wrappers — deferred via microtask to avoid blocking the caller
+function asyncWrap<T>(fn: () => T): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    queueMicrotask(() => {
+      try { resolve(fn()); }
+      catch (err) { reject(err); }
+    });
+  });
+}
+
 export const promises = {
   readFile: (path: string, options?: string | { encoding?: string }) =>
-    Promise.resolve(readFileSync(path, options)),
+    asyncWrap(() => readFileSync(path, options)),
   writeFile: (path: string, data: string | Uint8Array, options?: string | { encoding?: string }) =>
-    Promise.resolve(writeFileSync(path, data, options)),
+    asyncWrap(() => writeFileSync(path, data, options)),
   appendFile: (path: string, data: string | Uint8Array) =>
-    Promise.resolve(appendFileSync(path, data)),
+    asyncWrap(() => appendFileSync(path, data)),
   mkdir: (path: string, options?: { recursive?: boolean }) =>
-    Promise.resolve(mkdirSync(path, options)),
+    asyncWrap(() => mkdirSync(path, options)),
   readdir: (path: string, options?: { withFileTypes?: boolean }) =>
-    Promise.resolve(readdirSync(path, options)),
+    asyncWrap(() => readdirSync(path, options)),
   rmdir: (path: string, options?: { recursive?: boolean }) =>
-    Promise.resolve(rmdirSync(path, options)),
-  stat: (path: string) => Promise.resolve(statSync(path)),
-  lstat: (path: string) => Promise.resolve(lstatSync(path)),
-  unlink: (path: string) => Promise.resolve(unlinkSync(path)),
-  rename: (oldPath: string, newPath: string) => Promise.resolve(renameSync(oldPath, newPath)),
-  copyFile: (src: string, dest: string) => Promise.resolve(copyFileSync(src, dest)),
-  chmod: (path: string, mode: number) => Promise.resolve(chmodSync(path, mode)),
-  realpath: (path: string) => Promise.resolve(realpathSync(path)),
-  access: (path: string) => {
-    if (!existsSync(path)) return Promise.reject(new Error(`ENOENT: no such file or directory, access '${path}'`));
-    return Promise.resolve();
-  },
+    asyncWrap(() => rmdirSync(path, options)),
+  stat: (path: string) => asyncWrap(() => statSync(path)),
+  lstat: (path: string) => asyncWrap(() => lstatSync(path)),
+  unlink: (path: string) => asyncWrap(() => unlinkSync(path)),
+  rename: (oldPath: string, newPath: string) => asyncWrap(() => renameSync(oldPath, newPath)),
+  copyFile: (src: string, dest: string) => asyncWrap(() => copyFileSync(src, dest)),
+  chmod: (path: string, mode: number) => asyncWrap(() => chmodSync(path, mode)),
+  realpath: (path: string) => asyncWrap(() => realpathSync(path)),
+  access: (path: string) => asyncWrap(() => {
+    if (!existsSync(path)) throw new Error(`ENOENT: no such file or directory, access '${path}'`);
+  }),
 };
 
 // Callback-style wrappers
@@ -162,20 +170,48 @@ export function watch(path: string, options?: any, listener?: any) {
   return getVFS().watch(path, options, listener);
 }
 
-// createReadStream / createWriteStream stubs
-export function createReadStream(path: string): { on: (event: string, cb: (...args: any[]) => void) => any; pipe: (dest: any) => any } {
-  const data = readFileSync(path);
+// createReadStream / createWriteStream
+const READ_STREAM_CHUNK_SIZE = 16384; // 16 KB chunks
+
+export function createReadStream(path: string, options?: { highWaterMark?: number }): { on: (event: string, cb: (...args: any[]) => void) => any; pipe: (dest: any) => any } {
+  const raw = readFileSync(path) as Uint8Array;
+  const chunkSize = options?.highWaterMark ?? READ_STREAM_CHUNK_SIZE;
+  const listeners: Record<string, Array<(...args: any[]) => void>> = {};
+
+  function emit(event: string, ...args: any[]) {
+    const cbs = listeners[event];
+    if (cbs) for (const cb of cbs) cb(...args);
+  }
+
+  function emitChunks() {
+    let offset = 0;
+    function next() {
+      if (offset < raw.length) {
+        const chunk = raw.slice(offset, offset + chunkSize);
+        offset += chunkSize;
+        emit('data', chunk);
+        queueMicrotask(next);
+      } else {
+        emit('end');
+      }
+    }
+    queueMicrotask(next);
+  }
+
+  let started = false;
+  function ensureStarted() {
+    if (!started) { started = true; emitChunks(); }
+  }
+
   return {
     on(event: string, cb: (...args: any[]) => void) {
-      if (event === 'data') queueMicrotask(() => cb(data));
-      if (event === 'end') queueMicrotask(() => queueMicrotask(() => cb()));
+      (listeners[event] ??= []).push(cb);
+      ensureStarted();
       return this;
     },
     pipe(dest: any) {
-      queueMicrotask(() => {
-        dest.write?.(data);
-        dest.end?.();
-      });
+      this.on('data', (chunk: any) => dest.write?.(chunk));
+      this.on('end', () => dest.end?.());
       return dest;
     },
   };

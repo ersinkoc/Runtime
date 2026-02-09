@@ -8,7 +8,7 @@ import type { VirtualFS, ModuleLoader as IModuleLoader, RuntimeKernel, ConsoleEn
 import { RuntimeError, createError } from '../errors.js';
 import { ModuleCache } from './module-cache.js';
 import { injectSourceURL } from './source-url.js';
-import { resolveModule, getModuleFormat } from './module-resolver.js';
+import { resolveModule, getModuleFormat, clearResolutionCache } from './module-resolver.js';
 import { dirname } from '../vfs/path-utils.js';
 
 /**
@@ -22,6 +22,7 @@ import { dirname } from '../vfs/path-utils.js';
  */
 export function createModuleLoader(kernel: RuntimeKernel): IModuleLoader {
   const cjsCache = new ModuleCache();
+  const esmCache = new Map<string, unknown>();
   const builtins = new Map<string, unknown>();
   const builtinNames = new Set<string>();
 
@@ -144,6 +145,10 @@ export function createModuleLoader(kernel: RuntimeKernel): IModuleLoader {
         return builtins.get(name);
       }
 
+      // ESM result cache — avoid re-building blob URLs for repeated imports
+      const esmCached = esmCache.get(resolved);
+      if (esmCached) return esmCached;
+
       // Check if Blob URL import is available (browser environment)
       if (typeof Blob === 'undefined' || typeof URL?.createObjectURL !== 'function') {
         return loader.require(specifier, parentPath);
@@ -235,7 +240,9 @@ export function createModuleLoader(kernel: RuntimeKernel): IModuleLoader {
       }
       delete (globalThis as any)[builtinKey];
 
-      return importSuccess ? importedModule : loader.require(specifier, parentPath);
+      const result = importSuccess ? importedModule : loader.require(specifier, parentPath);
+      esmCache.set(resolved, result);
+      return result;
     },
 
     registerBuiltin(name: string, exports: unknown): void {
@@ -245,6 +252,8 @@ export function createModuleLoader(kernel: RuntimeKernel): IModuleLoader {
 
     clearCache(): void {
       cjsCache.clear();
+      esmCache.clear();
+      clearResolutionCache();
     },
   };
 
